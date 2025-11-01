@@ -1,0 +1,29 @@
+name: Deploy to S3 (OIDC)
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: <ROLE_ARN>      # استخدم ناتج: terraform output -raw github_actions_role_arn
+          aws-region: <REGION>            # نفس قيمة var.region (هنا us-west-2)
+
+      - name: Sync to S3 (preserve structure)
+        run: |
+          # عدّل المسار ./dist حسب مخرج بناء مشروعك (أو جذر الملفات)
+          aws s3 sync ./dist s3://<BUCKET>/<OPTIONAL_PREFIX> \
+            --delete \
+            --exact-timestamps \
+            --no-follow-symlinks
