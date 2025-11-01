@@ -3,6 +3,7 @@ name: Deploy static site to S3 (OIDC)
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch: {}   # لتشغيله يدويًا من Actions
 
 permissions:
   id-token: write
@@ -10,12 +11,13 @@ permissions:
 
 env:
   AWS_REGION: us-west-2
-  # لو عايز تنشر جوه مجلد (prefix) في البكت، حط القيمة هنا؛ وإلا سيبه فاضي
+  # لو عايز تنشر جوه مجلد (prefix) في البكت، حط قيمة هنا؛ وإلا سيبه فاضي
   S3_PREFIX: ""
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -23,10 +25,10 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # هنضيفه كـ Secret
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}     # 👈 من الـ Secrets
           aws-region: ${{ env.AWS_REGION }}
 
-      # لو محتاج Build (React/Angular/...), فك الكومنت وخلي SRC للمجلد الناتج
+      # لو مشروعك بيتبني (React / Angular / Vue ...)
       # - name: Build
       #   run: |
       #     npm ci
@@ -34,19 +36,21 @@ jobs:
 
       - name: Sync to S3 (preserve structure)
         run: |
-          # لو موقع استاتيك جاهز في الجذر:
-          SRC="."
-          # لو عندك مخرجات Build حطها هنا (مثلاً ./dist أو ./build)
-          # SRC="./dist"
-
-          BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+          SRC="."  # أو غيّرها لمجلد build أو dist حسب مشروعك
+          BUCKET="${{ secrets.S3_BUCKET_NAME }}"   # 👈 من الـ Secrets
 
           if [ ! -d "$SRC" ]; then
-            echo "⚠️ Folder $SRC not found. Adjust SRC to the right path (e.g., ./build or .)."
+            echo "⚠️ Folder $SRC not found. Set SRC to your site folder (e.g. ./build or .)."
             exit 1
           fi
+
+          echo "🚀 Deploying files from $SRC to s3://$BUCKET/$S3_PREFIX"
 
           aws s3 sync "$SRC" "s3://$BUCKET/$S3_PREFIX" \
             --delete \
             --exact-timestamps \
-            --no-follow-symlinks
+            --no-follow-symlinks \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "terraform/*" \
+            --exclude ".gitignore"
