@@ -16,10 +16,8 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -27,12 +25,11 @@ jobs:
           role-to-assume: arn:aws:iam::484614878230:role/Team1-github-oidc-deployer
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Sync to S3 (preserve structure)
+      - name: Sync to S3
         run: |
           SRC="."
           BUCKET="team1-web-ebac"
-          echo "🚀 Deploying files from $SRC to s3://$BUCKET/$S3_PREFIX"
-
+          echo "Deploying to s3://$BUCKET/$S3_PREFIX"
           aws s3 sync "$SRC" "s3://$BUCKET/$S3_PREFIX" \
             --delete \
             --exact-timestamps \
