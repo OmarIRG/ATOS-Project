@@ -1,4 +1,4 @@
-name: Deploy to S3 (OIDC)
+name: Deploy static site to S3 (OIDC)
 
 on:
   push:
@@ -8,22 +8,45 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: us-west-2
+  # لو عايز تنشر جوه مجلد (prefix) في البكت، حط القيمة هنا؛ وإلا سيبه فاضي
+  S3_PREFIX: ""
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: <ROLE_ARN>      # استخدم ناتج: terraform output -raw github_actions_role_arn
-          aws-region: <REGION>            # نفس قيمة var.region (هنا us-west-2)
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # هنضيفه كـ Secret
+          aws-region: ${{ env.AWS_REGION }}
+
+      # لو محتاج Build (React/Angular/...), فك الكومنت وخلي SRC للمجلد الناتج
+      # - name: Build
+      #   run: |
+      #     npm ci
+      #     npm run build
 
       - name: Sync to S3 (preserve structure)
         run: |
-          # عدّل المسار ./dist حسب مخرج بناء مشروعك (أو جذر الملفات)
-          aws s3 sync ./dist s3://<BUCKET>/<OPTIONAL_PREFIX> \
+          # لو موقع استاتيك جاهز في الجذر:
+          SRC="."
+          # لو عندك مخرجات Build حطها هنا (مثلاً ./dist أو ./build)
+          # SRC="./dist"
+
+          BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+
+          if [ ! -d "$SRC" ]; then
+            echo "⚠️ Folder $SRC not found. Adjust SRC to the right path (e.g., ./build or .)."
+            exit 1
+          fi
+
+          aws s3 sync "$SRC" "s3://$BUCKET/$S3_PREFIX" \
             --delete \
             --exact-timestamps \
             --no-follow-symlinks
