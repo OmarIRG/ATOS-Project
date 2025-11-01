@@ -3,7 +3,7 @@ name: Deploy static site to S3 (OIDC)
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: {}
+  workflow_dispatch: {}   # لتشغيله يدويًا من Actions
 
 permissions:
   id-token: write
@@ -16,21 +16,48 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # ✅ Inspect OIDC claims before assuming the role
+      - name: Print GitHub OIDC token claims
+        shell: bash
+        run: |
+          echo "🔍 Requesting OIDC token..."
+          resp=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          jwt=$(echo "$resp" | jq -r '.value')
+          payload=$(echo "$jwt" | cut -d. -f2 | base64 -d 2>/dev/null | tr -d '\n')
+          echo "OIDC sub:"
+          echo "$payload" | jq -r .sub
+          echo "OIDC aud:"
+          echo "$payload" | jq -r .aud
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::484614878230:role/Team1-github-oidc-deployer
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}     # 👈 من الـ Secrets
+          aws-region: ${{ env.AWS_REGION }}
+
+      # لو مشروعك بيتبني (React / Angular / Vue ...)
+      # - name: Build
+      #   run: |
+      #     npm ci
+      #     npm run build
 
       - name: Sync to S3 (preserve structure)
         run: |
-          SRC="."
-          BUCKET="team1-web-ebac"
-          echo "Deploying from $SRC to s3://$BUCKET/$S3_PREFIX"
+          SRC="."  # أو غيّرها لمجلد build أو dist حسب مشروعك
+          BUCKET="${{ secrets.S3_BUCKET_NAME }}"   # 👈 من الـ Secrets
+
+          if [ ! -d "$SRC" ]; then
+            echo "⚠️ Folder $SRC not found. Set SRC to your site folder (e.g. ./build or .)."
+            exit 1
+          fi
+
+          echo "🚀 Deploying files from $SRC to s3://$BUCKET/$S3_PREFIX"
+
           aws s3 sync "$SRC" "s3://$BUCKET/$S3_PREFIX" \
             --delete \
             --exact-timestamps \
