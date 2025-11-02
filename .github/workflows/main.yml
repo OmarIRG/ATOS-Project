@@ -22,13 +22,13 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::484614878230:role/Team1-github-oidc-deployer
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Sync to S3
         run: |
           SRC="."
-          BUCKET="team1-web-ebac"
+          BUCKET="${{ secrets.S3_BUCKET_NAME }}"
           echo "Deploying to s3://$BUCKET/$S3_PREFIX"
           aws s3 sync "$SRC" "s3://$BUCKET/$S3_PREFIX" \
             --delete \
